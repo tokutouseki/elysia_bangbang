@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node.js
+node_modules/
+dist/
+dist-electron/
+
+# Python interpreters
+Python3.11/
+Python3.13/
+
+# Logs
+all_log/*.log
+vedio_log/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+
+# Build files
+build/
+
+# OS
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

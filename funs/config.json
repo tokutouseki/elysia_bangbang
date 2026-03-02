@@ -1,0 +1,9 @@
+{
+    "email_config": {
+        "smtp_server": "smtp.qq.com",
+        "smtp_port": 587,
+        "sender_email": "3677481667@qq.com",
+        "sender_password_encrypted": "eWxud2J5d3dzYXJwY2loZQ==",
+        "receiver_email": "3398582158@qq.com"
+    }
+}
