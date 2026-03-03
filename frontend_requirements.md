@@ -16,8 +16,8 @@
 - vite: ^5.2.0  # 安装位置：front/node_modules/ 目录
 
 ### 注意事项
-- 前端依赖主要存放在 `front/node_modules` 目录（相对路径）
-- 部分依赖可能也会存放在 `node_modules` 目录（相对路径
+- 前端依赖主要存放在 `front/node_modules` 目录
+- 部分依赖可能也会存放在 `node_modules` 目录
 
 ## 脚本命令
 - `npm run dev`: 启动开发服务器

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 
 # Node.js
+node/
 node_modules/
 dist/
 dist-electron/
