@@ -7,13 +7,13 @@
 ## 依赖列表
 
 ### 生产依赖
-- vue: ^3.5.24
+- vue: ^3.5.24  # 安装位置：front/node_modules/ 目录
 
 ### 开发依赖
-- @vitejs/plugin-vue: ^5.0.4
-- electron: ^27.0.0
-- electron-builder: ^24.12.0
-- vite: ^5.2.0
+- @vitejs/plugin-vue: ^5.0.4  # 安装位置：front/node_modules/ 目录
+- electron: ^27.0.0  # 安装位置：front/node_modules/ 目录
+- electron-builder: ^24.12.0  # 安装位置：front/node_modules/ 目录
+- vite: ^5.2.0  # 安装位置：front/node_modules/ 目录
 
 ## 脚本命令
 - `npm run dev`: 启动开发服务器
