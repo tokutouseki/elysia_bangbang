@@ -15,6 +15,10 @@
 - electron-builder: ^24.12.0  # 安装位置：front/node_modules/ 目录
 - vite: ^5.2.0  # 安装位置：front/node_modules/ 目录
 
+### 注意事项
+- 前端依赖主要存放在 `c:\Users\33985\Desktop\hongkai\front\node_modules` 目录
+- 部分依赖可能也会存放在 `c:\Users\33985\Desktop\hongkai\node_modules` 目录
+
 ## 脚本命令
 - `npm run dev`: 启动开发服务器
 - `npm run build`: 构建生产版本
