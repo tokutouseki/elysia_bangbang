@@ -1026,7 +1026,7 @@ onMounted(() => {
           <div class="me-content">
             <h3>关于我</h3>
             <p>b站主页: <a href="https://space.bilibili.com/457079828?spm_id_from=333.1007.0.0" target="_blank">https://space.bilibili.com/457079828?spm_id_from=333.1007.0.0</a></p>
-            <p>项目主页：<a href="https://github.com/tokutouseki/Elysia_Bang_Bang" target="_blank">https://github.com/tokutouseki/Elysia_Bang_Bang</a></p>
+            <p>项目主页：<a href="https://github.com/tokutouseki/elysia_bangbang" target="_blank">https://github.com/tokutouseki/elysia_bangbang</a></p>
           </div>
         </div>
 
