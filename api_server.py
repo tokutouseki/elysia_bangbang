@@ -16,6 +16,9 @@ def after_request(response):
 # 获取脚本目录路径
 SCRIPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'process')
 
+# 项目自带的 Python3.11，拥有 pyautogui 等游戏自动化依赖
+PROJECT_PYTHON = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Python3.11', 'python.exe')
+
 @app.route('/run-script', methods=['GET'])
 def run_script():
     script_name = request.args.get('script')
@@ -33,7 +36,7 @@ def run_script():
         # 运行脚本并捕获输出
         # 使用shell=True并以管理员身份运行
         result = subprocess.run(
-            f'powershell -Command "Start-Process python -ArgumentList \"{script_path}\" -Verb RunAs -Wait"',
+            f'powershell -Command "Start-Process \'{PROJECT_PYTHON}\' -ArgumentList \'{script_path}\' -Verb RunAs -Wait"',
             shell=True,
             capture_output=True,
             text=True
@@ -143,7 +146,7 @@ def run_python_file():
         # 在新的命令行窗口中运行Python文件
         # 使用powershell的Start-Process命令，不等待进程结束
         subprocess.Popen(
-            f'powershell -Command "Start-Process python -ArgumentList \"{file_path}\" -WindowStyle Normal"',
+            f'powershell -Command "Start-Process \'{PROJECT_PYTHON}\' -ArgumentList \'{file_path}\' -WindowStyle Normal"',
             shell=True
         )
         
