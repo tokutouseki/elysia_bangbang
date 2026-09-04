@@ -398,22 +398,29 @@ def main():
     """
     主函数
     """
+    # Ensure UTF-8 output regardless of console/file encoding
+    import sys as _sys
+    if hasattr(_sys.stdout, 'reconfigure'):
+        _sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(_sys.stderr, 'reconfigure'):
+        _sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
     print("=" * 60)
-    print("YOLO服务端")
+    print("YOLO Server")
     print("=" * 60)
-    print(f"模型文件: {model_path}")
-    print(f"监听地址: {HOST}:{PORT}")
+    print(f"Model: {model_path}")
+    print(f"Listen: {HOST}:{PORT}")
     print("=" * 60)
-    
-    # 加载模型
-    print(f"[{time.strftime('%H:%M:%S')}] 正在加载ONNX模型...")
+
+    # Load model
+    print(f"[{time.strftime('%H:%M:%S')}] Loading ONNX model...")
     start_time = time.time()
     try:
         model = ONNXModel(model_path)
         load_time = time.time() - start_time
-        print(f"[{time.strftime('%H:%M:%S')}] ONNX模型加载完成，耗时: {load_time:.2f}秒")
+        print(f"[{time.strftime('%H:%M:%S')}] ONNX model loaded in {load_time:.2f}s")
     except Exception as e:
-        print(f"[{time.strftime('%H:%M:%S')}] 加载模型失败: {e}")
+        print(f"[{time.strftime('%H:%M:%S')}] Model load failed: {e}")
         return
     
     # 创建服务器套接字
@@ -425,9 +432,9 @@ def main():
         server_socket.bind((HOST, PORT))
         # 监听连接
         server_socket.listen(5)
-        print(f"[{time.strftime('%H:%M:%S')}] YOLO服务端已启动，监听: {HOST}:{PORT}")
-        print(f"[{time.strftime('%H:%M:%S')}] 模型文件: {model_path}")
-        print(f"[{time.strftime('%H:%M:%S')}] 等待客户端连接...")
+        print(f"[{time.strftime('%H:%M:%S')}] YOLO server started on {HOST}:{PORT}")
+        print(f"[{time.strftime('%H:%M:%S')}] Model: {model_path}")
+        print(f"[{time.strftime('%H:%M:%S')}] Waiting for connections...")
         
         while True:
             # 接受客户端连接
@@ -447,9 +454,9 @@ def main():
         # 关闭服务器套接字
         try:
             server_socket.close()
-            print(f"[{time.strftime('%H:%M:%S')}] 服务器套接字已关闭")
+            print(f"[{time.strftime('%H:%M:%S')}] Server socket closed")
         except Exception as e:
-            print(f"[{time.strftime('%H:%M:%S')}] 关闭服务器套接字出错: {e}")
+            print(f"[{time.strftime('%H:%M:%S')}] Close socket error: {e}")
 
 if __name__ == "__main__":
     main()

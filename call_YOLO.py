@@ -116,17 +116,27 @@ def _start_yolo_server():
     
     try:
         print(f"YOLO调试：正在启动YOLO服务端...")
+        log_dir = os.path.join(current_dir, 'all_log')
+        os.makedirs(log_dir, exist_ok=True)
+        yolo_log_path = os.path.join(log_dir, 'yolo_server.log')
+        yolo_log = open(yolo_log_path, 'a', encoding='utf-8')
+        yolo_log.write(f"\n[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] YOLO服务端启动\n")
+        yolo_log.flush()
+
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+
         _yolo_server_process = subprocess.Popen(
             [python_executable, server_script],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=yolo_log,
+            stderr=yolo_log,
             text=True,
             encoding='utf-8',
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
+            env=env,
             shell=False
         )
-        
-        max_wait_time = 10
+
+        max_wait_time = 20
         wait_time = 0
         while wait_time < max_wait_time:
             time.sleep(1)
@@ -473,6 +483,28 @@ def call_yolo_model(image_path,
     
     result = _call_yolo_subprocess(image_path, model_path, conf_threshold, python_executable, output_dir)
     return result
+
+
+def filter_guaiwu_ui_upper_half(screenshot_path, predictions):
+    """
+    过滤 guaiwu_xueliang_UI 检测结果，仅保留屏幕上半区的检测。
+    避免下半区的怪物血条干扰检测。
+    """
+    from PIL import Image
+    img = Image.open(screenshot_path)
+    img_height = img.height
+
+    filtered = []
+    for pred in predictions:
+        if pred.get("class_name") == "guaiwu_xueliang_UI":
+            bbox = pred.get("bbox", [])
+            if len(bbox) == 4:
+                center_y = (bbox[1] + bbox[3]) / 2
+                if center_y >= img_height / 2:
+                    continue
+        filtered.append(pred)
+
+    return filtered
 
 
 if __name__ == "__main__":

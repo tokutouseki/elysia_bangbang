@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hongkai Done — 崩坏3 自动化脚本架构全景分析</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1f6feb',
+      primaryTextColor: '#c9d1d9',
+      primaryBorderColor: '#30363d',
+      lineColor: '#58a6ff',
+      secondaryColor: '#161b22',
+      tertiaryColor: '#0d1117',
+      fontSize: '14px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    stateDiagram: { useMaxWidth: true }
+  });
+</script>
+<style>
+  :root {
+    --bg: #0d1117; --fg: #c9d1d9; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --orange: #d2991d; --red: #f85149; --purple: #a371f7;
+    --cyan: #39c5cf; --pink: #f778ba; --border: #30363d; --card-bg: #161b22;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+
+  .hero { background: linear-gradient(135deg, #0d1117 0%, #1a1f35 50%, #1a0a2e 100%); border-bottom:1px solid var(--border); padding:56px 36px; text-align:center; }
+  .hero h1 { font-size:2.3em; background: linear-gradient(135deg, #58a6ff, #a371f7, #f778ba); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:10px; }
+  .hero .sub { font-size:1.05em; color:var(--muted); max-width:700px; margin:0 auto; }
+  .hero .badges { display:flex; justify-content:center; gap:10px; margin-top:18px; flex-wrap:wrap; }
+  .badge { padding:5px 14px; border-radius:20px; font-size:0.85em; font-weight:600; }
+  .bg-py { background:#30699820; color:#ffd43b; border:1px solid #ffd43b40; }
+  .bg-js { background:#f7df1e20; color:#f7df1e; border:1px solid #f7df1e40; }
+  .bg-onnx { background:#00a67d20; color:#00a67d; border:1px solid #00a67d40; }
+  .bg-cv { background:#ff6b3520; color:#ff6b35; border:1px solid #ff6b3540; }
+  .bg-win { background:#0078d420; color:#0078d4; border:1px solid #0078d440; }
+  .bg-ocr { background:#ff475720; color:#ff4757; border:1px solid #ff475740; }
+
+  .container { max-width:1400px; margin:0 auto; padding:36px 20px; }
+  .section-title { font-size:1.45em; font-weight:700; margin:48px 0 20px; padding-bottom:10px; border-bottom:2px solid var(--border); display:flex; align-items:center; gap:10px; }
+
+  /* Stats */
+  .stats-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:14px; margin:20px 0; }
+  .stat-card { background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:18px; text-align:center; }
+  .stat-card .num { font-size:2.2em; font-weight:800; background:linear-gradient(135deg, #58a6ff, #a371f7); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .stat-card .label { font-size:0.85em; color:var(--muted); margin-top:4px; }
+
+  /* TOC */
+  .toc { background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:22px 28px; margin:20px 0; }
+  .toc h2 { margin-bottom:12px; font-size:1.1em; }
+  .toc ol { padding-left:22px; color:var(--muted); columns:2; }
+  .toc li { margin:5px 0; } .toc a { color:var(--accent); text-decoration:none; } .toc a:hover { text-decoration:underline; }
+
+  /* Cards */
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(420px, 1fr)); gap:16px; margin:20px 0; }
+  .card { background:var(--card-bg); border:1px solid var(--border); border-radius:12px; padding:22px; transition:border-color 0.2s; }
+  .card:hover { border-color:var(--accent); }
+  .card h3 { font-size:1.08em; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .card h3 .dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .card p, .card ul, .card ol { font-size:0.9em; color:var(--muted); }
+  .card ul, .card ol { padding-left:20px; margin:6px 0; } .card li { margin:3px 0; }
+  .card .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:0.76em; background:#30363d; margin:2px; color:var(--muted); }
+  .card .tag.green { background:#3fb95020; color:#3fb950; } .card .tag.blue { background:#58a6ff20; color:#58a6ff; }
+  .card .tag.purple { background:#a371f720; color:#a371f7; } .card .tag.orange { background:#d2991d20; color:#d2991d; } .card .tag.red { background:#f8514920; color:#f85149; }
+
+  /* Table */
+  .tech-table { width:100%; border-collapse:collapse; margin:14px 0; font-size:0.88em; }
+  .tech-table th { background:var(--card-bg); padding:10px 14px; text-align:left; border-bottom:2px solid var(--border); color:var(--accent); font-weight:600; }
+  .tech-table td { padding:9px 14px; border-bottom:1px solid var(--border); color:var(--muted); }
+  .tech-table tr:hover td { background:var(--hover-bg, #1c2129); color:var(--fg); }
+  .tech-table td:first-child { color:var(--fg); font-weight:500; }
+
+  /* Mermaid container */
+  .mermaid-wrap { background:var(--card-bg); border:1px solid var(--border); border-radius:16px; padding:24px 18px; margin:20px 0; overflow-x:auto; }
+  .mermaid-wrap .mermaid { display:flex; justify-content:center; }
+
+  .small { font-size:0.82em; color:var(--muted); }
+  .mt-12 { margin-top:12px; } .mt-20 { margin-top:20px; } .mt-24 { margin-top:24px; }
+  .mb-12 { margin-bottom:12px; }
+  code { background:#30363d; padding:2px 6px; border-radius:4px; font-size:0.9em; color:var(--accent); }
+  .footer { text-align:center; padding:36px; color:#484f58; font-size:0.85em; border-top:1px solid var(--border); margin-top:60px; }
+
+  @media (max-width:768px) {
+    .hero { padding:28px 14px; } .hero h1 { font-size:1.4em; }
+    .card-grid { grid-template-columns:1fr; } .toc ol { columns:1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HERO ===== -->
+<div class="hero">
+  <h1>Hongkai Done</h1>
+  <p class="sub">基于 ONNX YOLO11 + PP-OCRv4 的崩坏3游戏全流程自动化系统<br>覆盖日常、周常、往世乐土的完整任务编排与视觉识别引擎</p>
+  <div class="badges">
+    <span class="badge bg-py">Python 3.11</span><span class="badge bg-js">Vue 3 + Electron</span>
+    <span class="badge bg-onnx">ONNX Runtime</span><span class="badge bg-cv">OpenCV</span>
+    <span class="badge bg-win">Win32 API</span><span class="badge bg-ocr">RapidOCR</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ===== STATS ===== -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">58</div><div class="label">Python 源文件</div></div>
+  <div class="stat-card"><div class="num">24</div><div class="label">YOLO 检测类别</div></div>
+  <div class="stat-card"><div class="num">112</div><div class="label">模板匹配图片</div></div>
+  <div class="stat-card"><div class="num">100+</div><div class="label">OCR 点击映射</div></div>
+  <div class="stat-card"><div class="num">7</div><div class="label">日/周常流程</div></div>
+  <div class="stat-card"><div class="num">5</div><div class="label">并发服务进程</div></div>
+</div>
+
+<!-- ===== TOC ===== -->
+<div class="toc">
+  <h2>📑 目录</h2>
+  <ol>
+    <li><a href="#s1">系统六层架构图</a></li><li><a href="#s2">核心调用数据流</a></li>
+    <li><a href="#s3">视觉识别子系统 (YOLO + OCR)</a></li><li><a href="#s4">游戏自动化引擎</a></li>
+    <li><a href="#s5">往世乐土 AI 状态机</a></li><li><a href="#s6">前端交互层</a></li>
+    <li><a href="#s7">辅助子系统</a></li><li><a href="#s8">模块依赖关系图</a></li>
+    <li><a href="#s9">技术栈速查表</a></li><li><a href="#s10">运行时进程拓扑</a></li>
+  </ol>
+</div>
+
+<!-- ================================================================ -->
+<!-- S1: 系统六层架构 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s1">🏗️ 1. 系统六层架构总览</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart TB
+  subgraph L1["🖥️ 表现层 — Electron + Vue 3"]
+    direction LR
+    A1["Electron 27<br/>桌面壳 960×720"]
+    A2["Vue 3.5 SPA<br/>Composition API"]
+    A3["Vite 5<br/>HMR 热更新"]
+    A4["6 页面<br/>主页/帮助/工具/主题/赞赏/关于"]
+  end
+
+  subgraph L2["🔌 API 层 — Flask REST Server (Python 3.13)"]
+    direction LR
+    B1["Flask App<br/>Port 8002<br/>CORS 全开放"]
+    B2["run-script<br/>管理员提权执行"]
+    B3["get-log-files<br/>日志文件列表"]
+    B4["read-log-file<br/>日志内容读取"]
+    B5["get-tools-files<br/>工具箱文件"]
+    B6["run-python-file<br/>运行 .py 文件"]
+    B7["reproduce<br/>回放文件管理"]
+  end
+
+  subgraph L3["⚙️ 流程编排层 — Process Scripts"]
+    direction LR
+    C1["full_operation.py<br/>主调度器 · 按星期映射"]
+    C2["everyday.py<br/>每日任务 · 12步管道"]
+    C3["letu.py<br/>乐土入口 · 10步导航"]
+    C4["renwu_jianfu.py<br/>任务减负"]
+    C5["zhanchang.py<br/>记忆战场"]
+    C6["jiantuan.py<br/>舰团贡献"]
+    C7["simulation<br/>模拟作战室"]
+    C8["maoxian_weituo.py<br/>冒险委托"]
+    C9["shenzhijian.py<br/>神之键"]
+  end
+
+  subgraph L4["🧠 角色AI层 — Character Scripts (往世乐土全流程)"]
+    direction LR
+    D1["letu_elysia_star.py<br/>65KB · 4阶段状态机"]
+    D2["letu_find_way.py<br/>110KB · 地图导航"]
+    D3["letu_fight.py<br/>多线程战斗引擎"]
+    D4["letu_normal_keyin.py<br/>刻印加权选择"]
+    D5["select_core_keyin.py<br/>核心刻印决策"]
+    D6["shangdian_buy.py<br/>商店3线程购买"]
+    D7["keyin_all.py<br/>35KB OCR点击集"]
+    D8["check_next_done.py<br/>场景状态检测"]
+  end
+
+  subgraph L5["👁️ AI视觉层 — TCP 双微服务"]
+    direction LR
+    subgraph YOLO["YOLO Server :5001"]
+      Y1["ONNX Runtime<br/>yolo11n → best.onnx<br/>640×384 · 24类"]
+      Y2["ClientHandler<br/>Thread 并发<br/>健康检查 + 30s超时"]
+    end
+    subgraph OCR["OCR Server :5002"]
+      O1["RapidOCR<br/>PP-OCRv4<br/>det + rec + cls"]
+      O2["ClientHandler<br/>Thread 并发<br/>图片/截屏双模式"]
+    end
+    E1["call_YOLO.py<br/>统一编排 · 自动重启 · subprocess降级"]
+    E2["ocr_functions.py (37KB)<br/>服务优先 · 本地RapidOCR回退"]
+  end
+
+  subgraph L6["🖱️ 输入模拟层 — Win32 + PyAutoGUI"]
+    direction LR
+    F1["photos/clicks_keyboard.py<br/>模板匹配(112 PNG)<br/>Win32 SendInput 底层键鼠"]
+    F2["on_window.py<br/>FindWindowW · SetForeground<br/>ShellExecuteW UAC提权"]
+    F3["replay_keyboard.py<br/>JSON录制事件回放<br/>stop_event中断"]
+    F4["config.py<br/>点号嵌套key<br/>JSON状态持久化"]
+    F5["vedio_log.py<br/>全屏录制<br/>鼠标指示器"]
+  end
+
+  L1 -->|"HTTP REST (Flask :8002)"| L2
+  L2 -->|"PowerShell Start-Process -Verb RunAs"| L3
+  L3 -->|"调用"| L4
+  L3 -->|"TCP JSON+EOF"| L5
+  L4 -->|"TCP JSON+EOF"| L5
+  L5 -->|"键鼠操作"| L6
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S2: 核心调用数据流 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s2">🔗 2. 核心调用链路与数据流</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart LR
+  A["🖥️ 用户点击任务<br/>Vue3 App.vue"] -->|"fetch /run-script"| B["🔌 Flask API :8002<br/>api_server.py"]
+  B -->|"PowerShell<br/>Start-Process<br/>-Verb RunAs -Wait"| C["⚡ Process 脚本<br/>everyday.py"]
+  C --> D["🎮 自动化操作<br/>模板匹配 + 键鼠模拟"]
+  D --> E["🎯 崩坏3 游戏窗口<br/>1920×1080 全屏"]
+
+  D -.->|"截图"| F["📸 take_bh3_screenshot()"]
+  F -.->|"图片路径"| G["🔍 YOLO :5001<br/>24类元素检测"]
+  F -.->|"图片/区域"| H["📝 OCR :5002<br/>文字识别"]
+  G -.->|"{predictions}"| I["🧠 决策引擎<br/>状态判断 + 下一步行动"]
+  H -.->|"{texts, confidence}"| I
+  I -.->|"target coords"| D
+
+  style A fill:#3fb95022,stroke:#3fb950,color:#3fb950
+  style B fill:#d2991d22,stroke:#d2991d,color:#d2991d
+  style C fill:#a371f722,stroke:#a371f7,color:#a371f7
+  style D fill:#58a6ff22,stroke:#58a6ff,color:#58a6ff
+  style E fill:#f8514922,stroke:#f85149,color:#f85149
+  style G fill:#58a6ff22,stroke:#58a6ff
+  style H fill:#3fb95022,stroke:#3fb950
+  style I fill:#f778ba22,stroke:#f778ba
+</div>
+</div>
+
+<h3 style="margin-top:28px;margin-bottom:14px">📋 每日任务 (everyday.py) 执行时序</h3>
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart TD
+  S1["① VideoLogger.start()<br/>开始全屏录制 640×360"]
+  S2["② login_claim()<br/>模板匹配'每日'按钮<br/>最多5次重试"]
+  S3["③ make_on_main()<br/>ESC×3 返回舰桥"]
+  S4["④ claim_gold()<br/>金币→取出→领取<br/>3 子步骤"]
+  S5["⑤ attack_with_reduction()<br/>出击→推荐→材料远征<br/>→一键减负→确认"]
+  S6["⑥ fleet_functions()<br/>舰团委托回收×8<br/>舰团奖池领取×3<br/>未满8次重试最多3轮"]
+  S7["⑦ home_functions()<br/>家园远征派遣<br/>家园打工一键"]
+  S8["⑧ task_rewards()<br/>作战任务一键领取<br/>每日奖励×3"]
+  S9["⑨ VideoLogger.stop()<br/>停止录制 保存.mp4"]
+
+  S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
+
+  style S1 fill:#39c5cf22,stroke:#39c5cf
+  style S9 fill:#39c5cf22,stroke:#39c5cf
+  style S2 fill:#f8514922,stroke:#f85149
+  style S4 fill:#d2991d22,stroke:#d2991d
+  style S5 fill:#58a6ff22,stroke:#58a6ff
+  style S6 fill:#a371f722,stroke:#a371f7
+  style S7 fill:#3fb95022,stroke:#3fb950
+  style S8 fill:#f778ba22,stroke:#f778ba
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S3: 视觉识别子系统 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s3">👁️ 3. 视觉识别子系统</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart TB
+  subgraph ENTRY["统一调用入口"]
+    R["bh3_yolo_recognizer.py<br/>bh3_yolo_recognize()"]
+    R1["1. take_bh3_screenshot() 截取游戏窗口"]
+    R2["2. call_yolo_model() 调用YOLO"]
+    R3["3. filter_guaiwu_ui_upper_half() 过滤下半屏怪物血条"]
+    R4["4. 返回 {success, elements, screenshot_path}"]
+    R --> R1 --> R2 --> R3 --> R4
+  end
+
+  R2 -.-> YC["call_YOLO.py 编排层"]
+  YC -.->|"1.健康检查"| YS["YOLO Server :5001"]
+  YC -.->|"2.TCP调用"| YS
+  YC -.->|"3.失败重启"| YS
+  YC -.->|"4.subprocess降级"| YF["predict.py 直接推理"]
+
+  R2 -.-> OC["ocr_functions.py"]
+  OC -.->|"1.检查服务"| OS["OCR Server :5002"]
+  OC -.->|"2.启动服务"| OS
+  OC -.->|"3.TCP调用"| OS
+  OC -.->|"4.降级本地"| OF["RapidOCR 直接调用"]
+
+  subgraph YD["YOLO Server :5001 详情"]
+    YM["ONNXModel<br/>best.onnx (yolo11n)<br/>640×384 → 300检测框<br/>CPUExecutionProvider"]
+    YH["ClientHandler (Thread)<br/>并发多客户端 · 60s超时<br/>健康检查 · 资源监控<br/>预测超时保护(30s)"]
+  end
+
+  subgraph OD["OCR Server :5002 详情"]
+    OM["RapidOCR<br/>PP-OCRv4 三模型<br/>det + rec + cls<br/>use_angle_cls=True"]
+    OH["ClientHandler (Thread)<br/>预处理管道<br/>边缘填充→灰度化→CLAHE<br/>→降噪→自适应二值化"]
+    OK["ocr_click.py (17KB)<br/>100+ 游戏文本点击映射"]
+  end
+
+  YS -.-> YD
+  OS -.-> OD
+  OD -.-> OK
+
+  style ENTRY fill:#58a6ff18,stroke:#58a6ff
+  style YD fill:#58a6ff10,stroke:#58a6ff60
+  style OD fill:#3fb95010,stroke:#3fb95060
+  style OK fill:#f778ba18,stroke:#f778ba
+</div>
+</div>
+
+<div class="card-grid mt-24">
+  <div class="card">
+    <h3><span class="dot" style="background:var(--accent)"></span> YOLO11 ONNX 目标检测</h3>
+    <p class="small mb-12">TCP 服务端常驻 · 模型加载一次 · 全任务共享</p>
+    <p><strong>模型：</strong>yolo11n → best.onnx (640×384, 24类)</p>
+    <p><strong>推理引擎：</strong>ONNX Runtime CPUExecutionProvider</p>
+    <p><strong>通信协议：</strong>TCP Socket · JSON + <code>\nEOF\n</code> 分隔 · UTF-8</p>
+    <p><strong>24 类检测目标：</strong></p>
+    <p class="small">elysia_star · aomie · zhenwo · kongmeng · shanbiyvjing · xuanze_R · guaiwu_xueliang_UI · xuanze_r · keyin · keyin_open · shangdian · jielv · luoxuan · shangdian_open · tianhui · fanxing · lock_on · wuxian · chana · huangjin · jiushi · xvguang · fusheng · BOSS</p>
+    <div class="mt-12"><span class="tag blue">onnxruntime</span><span class="tag green">TCP Socket</span><span class="tag green">Multi-thread</span><span class="tag purple">Health Check</span><span class="tag orange">Auto-restart</span></div>
+   </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--green)"></span> RapidOCR 文字识别</h3>
+    <p class="small mb-12">TCP 服务端常驻 · PP-OCRv4 三模型协同</p>
+    <table class="tech-table">
+      <tr><th>模型</th><th>文件</th><th>功能</th></tr>
+      <tr><td>检测</td><td>ch_PP-OCRv4_det_infer.onnx</td><td>定位文字区域</td></tr>
+      <tr><td>识别</td><td>ch_PP-OCRv4_rec_infer.onnx</td><td>识别文字内容</td></tr>
+      <tr><td>分类</td><td>ch_ppocr_mobile_v2.0_cls_infer.onnx</td><td>文字方向判断</td></tr>
+    </table>
+    <p><strong>预处理管道：</strong></p>
+    <p class="small">边缘填充(5%白边) → 灰度化 → CLAHE 对比度增强 → fastNlMeansDenoising 降噪 → 自适应阈值二值化</p>
+    <div class="mt-12"><span class="tag green">RapidOCR</span><span class="tag green">PP-OCRv4</span><span class="tag blue">Multi-thread</span><span class="tag purple">双模式</span></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--orange)"></span> OpenCV 模板匹配</h3>
+    <p class="small mb-12">112 张游戏 UI 截图，像素级匹配</p>
+    <p><strong>算法：</strong>cv2.matchTemplate()</p>
+    <p><strong>核心函数：</strong><code>is_complex_temp()</code></p>
+    <ul><li>屏幕缩放比例自动适配</li><li>可指定搜索区域 (region参数)</li><li>置信度阈值控制 (典型值 0.8)</li><li>返回匹配位置 + 置信度</li></ul>
+    <div class="mt-12"><span class="tag orange">OpenCV</span><span class="tag orange">matchTemplate</span><span class="tag purple">112 templates</span></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--red)"></span> Win32 SendInput 键鼠</h3>
+    <p class="small mb-12">双引擎策略 · 底层绕过游戏保护</p>
+    <p><strong>主引擎：</strong>Win32 SendInput (ctypes 调用 user32.dll)</p>
+    <ul><li>INPUT / MOUSEINPUT 结构体</li><li>MOUSEEVENTF_ABSOLUTE + VIRTUALDESK</li><li>鼠标：移动/点击/滚轮(垂直+水平)</li><li>键盘：按下/释放/组合键</li></ul>
+    <p><strong>辅助引擎：</strong>PyAutoGUI (高层截屏/简单点击)</p>
+    <p><strong>窗口管理：</strong>FindWindowW · SetForegroundWindow · ShellExecuteW (UAC)</p>
+    <div class="mt-12"><span class="tag red">ctypes</span><span class="tag red">user32.dll</span><span class="tag orange">PyAutoGUI</span></div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S4: 游戏自动化引擎 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s4">🤖 4. 游戏自动化引擎</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="dot" style="background:var(--accent)"></span> 主调度器 full_operation.py</h3>
+    <table class="tech-table">
+      <tr><th>星期</th><th>执行任务</th></tr>
+      <tr><td>星期一</td><td>每日 + 减负 + 礼包 + <strong>乐土</strong></td></tr>
+      <tr><td>星期二</td><td>每日 + 战场 + 模拟作战室</td></tr>
+      <tr><td>星期三/四</td><td>每日 + 战场</td></tr>
+      <tr><td>星期五/六</td><td>每日</td></tr>
+      <tr><td>星期日</td><td>每日 + 舰团贡献 + 模拟作战室</td></tr>
+    </table>
+    <p class="mt-12"><strong>执行流程：</strong>管理员提权检查 → save_datetime_data() → focus_bh3_window() → 遍历 todo_list → exec() 逐任务执行 → try/except 容错</p>
+    <p class="small">📄 process/full_operation.py</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--green)"></span> 每日任务 everyday.py (9步管道)</h3>
+    <ol>
+      <li>VideoLogger.start() — 开始录屏</li>
+      <li>login_claim() — 登录领取 (最多5次重试)</li>
+      <li>make_on_main() — 返回舰桥主界面</li>
+      <li>claim_gold() — 领取金币 (3子步)</li>
+      <li>attack_with_reduction() — 出击减负 (6子步)</li>
+      <li>fleet_functions() — 舰团委托回收 ×8 + 奖池</li>
+      <li>重试循环 — 未满8次重新进入委托</li>
+      <li>home_functions() — 家园远征 + 打工</li>
+      <li>task_rewards() — 作战任务 + 每日奖励×3</li>
+    </ol>
+    <p class="small">📄 process/everyday.py (585行)</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--orange)"></span> Win32 窗口管理 on_window.py</h3>
+    <table class="tech-table">
+      <tr><th>API</th><th>DLL</th><th>功能</th></tr>
+      <tr><td><code>FindWindowW</code></td><td>user32</td><td>查找"崩坏3"窗口句柄</td></tr>
+      <tr><td><code>SetForegroundWindow</code></td><td>user32</td><td>窗口置前聚焦</td></tr>
+      <tr><td><code>GetWindowRect</code></td><td>user32</td><td>获取窗口位置/大小</td></tr>
+      <tr><td><code>IsWindowVisible</code></td><td>user32</td><td>窗口可见性检测</td></tr>
+      <tr><td><code>ShellExecuteW</code></td><td>shell32</td><td>UAC 管理员提权重启</td></tr>
+      <tr><td><code>SetWindowPos</code></td><td>user32</td><td>窗口置顶/取消置顶</td></tr>
+    </table>
+    <p class="small">📄 on_window.py — 纯 ctypes 实现，零外部依赖</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--purple)"></span> 配置管理 config.py</h3>
+    <p><strong>存储：</strong>config.json (运行时状态追踪)</p>
+    <p><strong>核心 API：</strong></p>
+    <ul>
+      <li><code>load_config(key, default)</code> — 支持点号嵌套读取</li>
+      <li><code>save_config(config)</code> — JSON 持久化 (indent=4)</li>
+      <li><code>update_config(key, value)</code> — 点号嵌套写入</li>
+    </ul>
+    <p><strong>跨运行状态记忆：</strong></p>
+    <p class="small">letu_level_done · zhuiyizhizheng_done · letu_chuzhan_set_done · shenzhijian_done</p>
+    <p class="small">用于记住一次性设置（关卡配置、追忆之证等），避免每次运行时重复操作</p>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S5: 乐土 AI 状态机 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s5">⚔️ 5. 往世乐土 AI — 四阶段状态机 (核心亮点)</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart TD
+  subgraph ENTER["letu.py — 乐土入口 (10步导航)"]
+    E1["click_chuji → click_tiaozhan → click_letu"]
+    E2["keyboard_f → click_shencengxvlie"]
+    E3["replay letu_level.json"]
+    E4["click_jianfuzhandou → shenzhijian()"]
+    E5["replay zhuiyizhizheng.json"]
+    E1 --> E2 --> E3 --> E4 --> E5
+  end
+
+  E5 --> S1
+
+  subgraph S1BOX["阶段 1: 初始化"]
+    S1["init_keyin_core_files()<br/>重置刻印/核心计数器<br/><br/>read_keyin_detail()<br/>读取各刻印权重配置<br/><br/>check_elysia_star_exists()<br/>YOLO确认角色在场景中"]
+  end
+
+  S1 --> S2
+
+  subgraph S2BOX["阶段 2: 战斗循环 (while 未完成)"]
+    subgraph T["letu_fight.py — 多线程战斗引擎"]
+      T1["Thread 1: detect_monster_ui<br/>YOLO 持续检测怪物血条"]
+      T2["Thread 2: detect_image_changes<br/>场景变化识别"]
+      T3["Thread 3: replay_keyboard_events<br/>战斗操作回放"]
+    end
+    EV["5个 threading.Event 协调:<br/>monster_detected · not_guaiwuUI<br/>monster_stop · battle_end · global_stop<br/><br/>退出条件: 5秒无怪物UI + 5秒无elysia_star<br/>+ letu_fight_on 模板匹配确认"]
+  end
+
+  S2 --> S3
+
+  subgraph S3BOX["阶段 3: 战斗后决策"]
+    CHK["check_next_done() YOLO检测界面状态<br/>keyin_open · keyin · shangdian_open · shangdian · BOSS · lock_on"]
+    CHK --> K{"界面类型?"}
+    K -->|"刻印选择"| KI["single_select_keyin() 或<br/>double_select_keyin()<br/>OCR识别 + 加权策略点击<br/>权重来源: keyin_detail.json (0.1~1.0)"]
+    K -->|"商店"| SH["shangdian_buy()<br/>OCR识别商品 + 3线程并行购买<br/>A/W/E 键加速操作"]
+    K -->|"需要移动"| FW["find_elements() (110KB)<br/>3线程: W前进 + A转向 + YOLO目标检测<br/>threading.Event 通信 · 30s超时保护"]
+    K -->|"BOSS/传送"| BOSS["前往下一层"]
+  end
+
+  S3 --> S4
+
+  subgraph S4BOX["阶段 4: 核心刻印 + 循环"]
+    CORE["check_keyin_counts() OCR 统计刻印数量<br/>select_core_keyin() 核心刻印选择决策<br/>检查 BOSS 传送门状态"]
+  end
+
+  S4 -->|"继续战斗"| S2
+  S4 -->|"通关/重置"| DONE["✅ 乐土完成<br/>make_on_main() 返回主界面"]
+
+  style ENTER fill:#58a6ff18,stroke:#58a6ff
+  style S1BOX fill:#58a6ff14,stroke:#58a6ff
+  style S2BOX fill:#3fb95014,stroke:#3fb950
+  style S3BOX fill:#d2991d14,stroke:#d2991d
+  style S4BOX fill:#a371f714,stroke:#a371f7
+  style T fill:#3fb95010,stroke:#3fb95060
+  style DONE fill:#3fb95022,stroke:#3fb950
+</div>
+</div>
+
+<div class="card-grid mt-24">
+  <div class="card">
+    <h3><span class="dot" style="background:var(--accent)"></span> 刻印加权选择策略</h3>
+    <table class="tech-table">
+      <tr><th>刻印</th><th>权重</th><th>类型</th></tr>
+      <tr><td>zhenwo (真我)</td><td><strong>1.00</strong></td><td>核心</td></tr>
+      <tr><td>jiushi (救世)</td><td>0.73</td><td>普通</td></tr>
+      <tr><td>huangjin (黄金)</td><td>0.72</td><td>普通</td></tr>
+      <tr><td>fusheng (浮生)</td><td>0.71</td><td>普通</td></tr>
+      <tr><td>aomie (鏖灭)</td><td>0.70</td><td>普通</td></tr>
+      <tr><td>kongmeng (空梦)</td><td>0.49</td><td>普通</td></tr>
+      <tr><td>fanxing (繁星)</td><td>0.48</td><td>普通</td></tr>
+      <tr><td>chana (刹那)</td><td>0.40</td><td>普通</td></tr>
+      <tr><td>tianhui/jielv/luoxuan/wuxian/xvguang</td><td>0.10</td><td>低优</td></tr>
+    </table>
+    <p class="small mt-12">📄 character/letu_normal_keyin.py · ocr/keyin_detail.json</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--green)"></span> 路径导航 letu_find_way.py (110KB)</h3>
+    <table class="tech-table">
+      <tr><th>线程</th><th>操作</th><th>函数</th></tr>
+      <tr><td>w_thread</td><td>按住 W 前进</td><td>hold_key_with_ck()</td></tr>
+      <tr><td>a_thread</td><td>按住 A/D 转向</td><td>hold_key_with_ck()</td></tr>
+      <tr><td>detect_thread</td><td>YOLO 实时目标检测</td><td>bh3_yolo_recognize()</td></tr>
+    </table>
+    <p><strong>通信：</strong>threading.Event (stop_event) + shared_state 字典</p>
+    <p><strong>保护：</strong>detect_thread.join(timeout=30)</p>
+    <p><strong>导航场景：</strong>刻印门 · 商店 · BOSS传送门 · 普通传送点</p>
+    <p class="small">按住W前进→同时A/D转向→YOLO检测到目标→set stop_event→松开按键→前往</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--orange)"></span> 商店购买 shangdian_buy.py</h3>
+    <ul><li>OCR 识别商店中的刻印名称和价格</li><li>根据权重决定购买优先级</li><li><strong>3 线程并行按键 (A/W/E)</strong> 加速购买</li><li>重复进入商店直至金币不足</li></ul>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--red)"></span> 战斗检测状态机 letu_fight.py</h3>
+    <table class="tech-table">
+      <tr><th>Event</th><th>含义</th></tr>
+      <tr><td><code>monster_detected_event</code></td><td>检测到怪物UI</td></tr>
+      <tr><td><code>not_guaiwuUI_event</code></td><td>连续2次未检测到怪物</td></tr>
+      <tr><td><code>monster_stop_event</code></td><td>强制停止怪物检测</td></tr>
+      <tr><td><code>battle_end_event</code></td><td>战斗已结束</td></tr>
+      <tr><td><code>global_stop_event</code></td><td>全局停止信号</td></tr>
+    </table>
+    <p class="mt-12"><strong>3 个并发线程：</strong>怪物UI检测 + 场景变化识别 + 键盘操作回放</p>
+    <p><strong>退出条件：</strong>5秒无 guaiwu_xueliang_UI + 5秒无 elysia_star + letu_fight_on 模板匹配确认</p>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S6: 前端交互层 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s6">🖥️ 6. 前端交互层 (Vue3 + Electron + Flask)</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart LR
+  subgraph FRONT["front/ — Electron + Vue 3 + Vite 5"]
+    E["Electron 27 Main Process<br/>electron/main.js<br/>960×720 · 不可resize<br/>隐藏菜单 · 无DevTools"]
+    V["Vue 3.5 SPA<br/>src/App.vue (1162行)<br/>Composition API<br/>6页面 · 粉蓝双主题"]
+    VI["Vite 5 Dev Server<br/>:5173 · HMR 热更新"]
+    E -->|loadURL| V
+    VI -->|serve| V
+  end
+
+  subgraph API["Flask API Server (Python 3.13)"]
+    direction TB
+    R1["GET /run-script<br/>管理员权限运行脚本"]
+    R2["GET /get-log-files<br/>获取日志文件列表"]
+    R3["GET /read-log-file<br/>读取日志内容"]
+    R4["GET /get-tools-files<br/>获取工具箱文件"]
+    R5["GET /run-python-file<br/>运行 .py 文件"]
+    R6["GET /read-tool-file<br/>读取工具文件(UTF-8/GBK)"]
+    R7["GET /get-reproduce-files<br/>获取回放文件列表"]
+    R8["GET /read-reproduce-file<br/>读取回放文件"]
+  end
+
+  V -->|"fetch() CORS"| API
+  R1 -->|"PowerShell<br/>Start-Process -Verb RunAs"| PS["Process Scripts<br/>everyday.py / letu.py / ..."]
+
+  style FRONT fill:#39c5cf18,stroke:#39c5cf
+  style API fill:#d2991d18,stroke:#d2991d
+  style E fill:#39c5cf22,stroke:#39c5cf
+  style V fill:#3fb95022,stroke:#3fb950
+  style VI fill:#58a6ff22,stroke:#58a6ff
+</div>
+</div>
+
+<div class="card-grid mt-24">
+  <div class="card">
+    <h3><span class="dot" style="background:#3fb950"></span> Vue 3 单页应用</h3>
+    <table class="tech-table">
+      <tr><th>特性</th><th>详情</th></tr>
+      <tr><td>框架</td><td>Vue 3.5 (Composition API)</td></tr>
+      <tr><td>构建</td><td>Vite 5 (HMR 热更新)</td></tr>
+      <tr><td>语法</td><td>&lt;script setup&gt; 单文件组件</td></tr>
+      <tr><td>API</td><td>ref · computed · watch · onMounted</td></tr>
+      <tr><td>页面</td><td>主页 / 帮助 / 工具箱 / 主题 / 赞赏 / 关于</td></tr>
+      <tr><td>主题</td><td>粉/蓝双色 CSS Variables 动态切换</td></tr>
+      <tr><td>样式</td><td>1162行纯 CSS · 960×720 固定布局</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:#f7df1e"></span> Electron 桌面壳</h3>
+    <table class="tech-table">
+      <tr><th>配置</th><th>值</th></tr>
+      <tr><td>Electron</td><td>27.0.0</td></tr>
+      <tr><td>electron-builder</td><td>24.12.0</td></tr>
+      <tr><td>入口</td><td>electron/main.js (112行)</td></tr>
+      <tr><td>窗口</td><td>960×720 · 不可resize · 隐藏菜单</td></tr>
+      <tr><td>加载</td><td>:5173 (dev) / dist/index.html (prod)</td></tr>
+      <tr><td>打包</td><td>NSIS 安装包 + portable 便携版</td></tr>
+      <tr><td>平台</td><td>Windows (nsis, portable)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S7: 辅助子系统 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s7">🔧 7. 辅助子系统</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="dot" style="background:var(--cyan)"></span> 视频日志 vedio_log.py</h3>
+    <p><strong>VideoLogger 类：</strong>独立线程全屏录制</p>
+    <ul>
+      <li>PIL ImageGrab 全屏截取 → OpenCV VideoWriter</li>
+      <li>红色鼠标指示器 (圆圈 + 十字线)</li>
+      <li>自适应帧率 (目标30fps → 实际约18fps)</li>
+      <li>640×360 输出 · mp4v 编码 · .mp4 容器</li>
+      <li>自动清理 1 天前的旧视频</li>
+      <li>上下文管理器支持 (<code>with VideoLogger(): ...</code>)</li>
+    </ul>
+    <div class="mt-12"><span class="tag blue">PIL ImageGrab</span><span class="tag blue">OpenCV</span><span class="tag green">Thread</span><span class="tag purple">mp4v</span></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--orange)"></span> 键盘录制/回放系统</h3>
+    <p><strong>record.py：</strong>录制键盘+鼠标事件为 JSON</p>
+    <p><strong>replay_keyboard.py：</strong>按时间戳回放</p>
+    <ul>
+      <li>JSON 格式：{"键盘事件": [...], "鼠标事件": [...]}</li>
+      <li>事件按 start_time 排序 + 精确延迟等待</li>
+      <li><code>stop_event</code> 支持外部中断回放</li>
+    </ul>
+    <p class="mt-12"><strong>预置回放文件 (reproduce/)：</strong></p>
+    <p class="small">letu_level.json · zhuiyizhizheng.json · shenzhijian.json · renwu_jianfu.json · letu_elysia_star_jiaxin_fangting_loop.json</p>
+  </div>
+
+  <div class="card">
+    <h3><span class="dot" style="background:var(--purple)"></span> 启动编排 start_all.bat</h3>
+    <p><strong>一键启动全部 5 个服务进程：</strong></p>
+    <table class="tech-table">
+      <tr><th>#</th><th>服务</th><th>命令</th><th>运行时</th></tr>
+      <tr><td>1</td><td>OCR Server</td><td><code>ocr_server_final.py</code></td><td>Python 3.11</td></tr>
+      <tr><td>2</td><td>YOLO Server</td><td><code>yolo_server_final.py</code></td><td>Python 3.11</td></tr>
+      <tr><td>3</td><td>API Server</td><td><code>api_server.py</code></td><td>Python 3.13</td></tr>
+      <tr><td>4</td><td>Vite Dev Server</td><td><code>npm run dev</code></td><td>Node.js v20.11.1</td></tr>
+      <tr><td>5</td><td>Electron Frontend</td><td><code>npm run electron:dev</code></td><td>Node.js v20.11.1</td></tr>
+    </table>
+    <p class="small mt-12"><strong>双 Python 版本共存：</strong>Python3.11/ (游戏自动化依赖) + Python3.13/ (Flask API)</p>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S8: 模块依赖关系图 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s8">🔀 8. 模块依赖关系图</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+graph TD
+  API["api_server.py<br/>Flask REST API<br/>Python 3.13"]
+  FULL["full_operation.py<br/>主调度器 · 按星期执行"]
+  EVERYDAY["everyday.py<br/>每日任务 · 12步管道"]
+  LETU["letu.py<br/>乐土入口 · 10步导航"]
+  RENWU["renwu_jianfu.py<br/>任务减负"]
+  ZHANCHANG["zhanchang.py<br/>记忆战场"]
+  JIANTUAN["jiantuangongxian.py<br/>舰团贡献"]
+  MAOXIAN["maoxian_weituo.py<br/>冒险委托"]
+  SIM["simulation_combat_room.py<br/>模拟作战室"]
+  SHEN["shenzhijian.py<br/>神之键"]
+  MAINSCREEN["main_screen.py<br/>主界面导航"]
+  GIF["everyweek_gift.py<br/>每周礼包"]
+
+  LETU_ES["letu_elysia_star.py<br/>65KB · 4阶段状态机"]
+  LETU_FW["letu_find_way.py<br/>110KB · 路径导航"]
+  LETU_FIGHT["letu_fight.py<br/>多线程战斗引擎"]
+  LETU_KEYIN["letu_normal_keyin.py<br/>刻印加权选择"]
+  SEL_CORE["select_core_keyin.py<br/>核心刻印决策"]
+  SHOP["shangdian_buy.py<br/>商店购买"]
+  KEYIN_ALL["keyin_all.py<br/>35KB OCR点击集"]
+  CHECK_NEXT["check_next_done.py<br/>场景状态检测"]
+  ELYSIA["elysia_star.py<br/>角色技能编排"]
+  WULI["wuli_character.py<br/>物理角色"]
+  YUANSU["yuansu_character.py<br/>元素角色"]
+
+  YOLO_SRV["yolo_server_final.py<br/>YOLO TCP :5001"]
+  YOLO_CLI["yolo_client.py<br/>TCP客户端 · 自动重连"]
+  CALL_YOLO["call_YOLO.py<br/>统一编排 · 降级"]
+  BH3_YOLO["bh3_yolo_recognizer.py<br/>截图+YOLO+过滤"]
+
+  OCR_SRV["ocr_server_final.py<br/>OCR TCP :5002"]
+  OCR_CLI["ocr_client.py<br/>OCR TCP客户端"]
+  OCR_FUNC["ocr_functions.py<br/>37KB · 服务优先+回退"]
+  OCR_CLICK["ocr_click.py<br/>17KB · 100+文本映射"]
+
+  CLICKS["photos/clicks_keyboard.py<br/>模板匹配 + 键鼠模拟"]
+  ON_WIN["on_window.py<br/>Win32窗口管理"]
+  REPLAY["replay_keyboard.py<br/>键盘事件回放"]
+  VEDIO["vedio_log.py<br/>屏幕录制"]
+  CONFIG["config.py<br/>配置/状态管理"]
+  SAVE_OUT["all_log/save_output.py<br/>日志持久化"]
+  DATETIME["time_date/custom_datetime.py<br/>日期计算"]
+
+  VUE["front/src/App.vue<br/>Vue3 SPA · 1162行"]
+  ELECTRON["front/electron/main.js<br/>Electron 主进程"]
+
+  API --> FULL
+  FULL --> EVERYDAY
+  FULL --> LETU
+  FULL --> RENWU
+  FULL --> ZHANCHANG
+  FULL --> JIANTUAN
+  FULL --> MAOXIAN
+  FULL --> SIM
+  FULL --> SHEN
+  FULL --> MAINSCREEN
+  FULL --> GIF
+
+  LETU --> LETU_ES
+  LETU --> SHEN
+  LETU_ES --> LETU_FIGHT
+  LETU_ES --> LETU_FW
+  LETU_ES --> LETU_KEYIN
+  LETU_ES --> SEL_CORE
+  LETU_ES --> SHOP
+  LETU_ES --> CHECK_NEXT
+  LETU_ES --> KEYIN_ALL
+  LETU_ES --> ELYSIA
+  LETU_ES --> OCR_CLI
+
+  EVERYDAY --> CLICKS
+  EVERYDAY --> ON_WIN
+  EVERYDAY --> VEDIO
+  EVERYDAY --> MAINSCREEN
+  EVERYDAY --> DATETIME
+
+  LETU_FIGHT --> BH3_YOLO
+  LETU_FIGHT --> CLICKS
+  LETU_FIGHT --> REPLAY
+  LETU_FW --> BH3_YOLO
+  LETU_FW --> CLICKS
+
+  BH3_YOLO --> CALL_YOLO
+  CALL_YOLO --> YOLO_CLI
+  YOLO_CLI --> YOLO_SRV
+
+  LETU_KEYIN --> OCR_FUNC
+  SEL_CORE --> OCR_FUNC
+  SHOP --> OCR_FUNC
+  CHECK_NEXT --> BH3_YOLO
+  KEYIN_ALL --> OCR_CLICK
+  OCR_CLICK --> OCR_FUNC
+  OCR_FUNC --> OCR_CLI
+  OCR_CLI --> OCR_SRV
+
+  CLICKS --> ON_WIN
+  API --> VUE
+  VUE --> ELECTRON
+
+  style API fill:#d2991d22,stroke:#d2991d
+  style FULL fill:#a371f722,stroke:#a371f7
+  style LETU_ES fill:#f778ba22,stroke:#f778ba
+  style LETU_FW fill:#f778ba22,stroke:#f778ba
+  style LETU_FIGHT fill:#f778ba22,stroke:#f778ba
+  style YOLO_SRV fill:#58a6ff22,stroke:#58a6ff
+  style OCR_SRV fill:#3fb95022,stroke:#3fb950
+  style VUE fill:#39c5cf22,stroke:#39c5cf
+</div>
+</div>
+
+<!-- ================================================================ -->
+<!-- S9: 技术栈速查表 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s9">📊 9. 技术栈速查表</h2>
+
+<table class="tech-table">
+  <tr><th>层级</th><th>技术</th><th>用途</th><th>关键文件</th></tr>
+  <tr><td rowspan="3"><strong>前端</strong></td><td>Vue 3.5 (Composition API)</td><td>响应式UI · 任务管理 · 日志查看</td><td>front/src/App.vue</td></tr>
+  <tr><td>Electron 27</td><td>桌面壳 · 原生窗口管理</td><td>front/electron/main.js</td></tr>
+  <tr><td>Vite 5</td><td>构建工具 · HMR 热更新</td><td>front/vite.config.js</td></tr>
+  <tr><td rowspan="2"><strong>后端</strong></td><td>Flask</td><td>REST API · 脚本调度器 · 8端点</td><td>api_server.py</td></tr>
+  <tr><td>PowerShell RunAs</td><td>管理员权限提权 · 进程管理</td><td>api_server.py:39</td></tr>
+  <tr><td rowspan="5"><strong>AI 视觉</strong></td><td>YOLO11n (ONNX)</td><td>24类游戏UI元素实时检测</td><td>yolo_server_final.py</td></tr>
+  <tr><td>ONNX Runtime (CPU)</td><td>跨平台模型推理</td><td>yolo_server_final.py:165</td></tr>
+  <tr><td>RapidOCR</td><td>游戏内文字识别引擎</td><td>ocr_server_final.py:94</td></tr>
+  <tr><td>PP-OCRv4 (det+rec+cls)</td><td>高精度中英文OCR</td><td>ocr_server_final.py:358-360</td></tr>
+  <tr><td>OpenCV</td><td>图像预处理 · 模板匹配 · 视频编码</td><td>各处</td></tr>
+  <tr><td rowspan="3"><strong>系统交互</strong></td><td>Win32 API (ctypes)</td><td>FindWindow · SetForeground · UAC提权</td><td>on_window.py</td></tr>
+  <tr><td>Win32 SendInput</td><td>底层键鼠模拟 (绕过游戏保护)</td><td>photos/clicks_keyboard.py</td></tr>
+  <tr><td>PyAutoGUI</td><td>高层截屏/点击操作</td><td>各处</td></tr>
+  <tr><td rowspan="4"><strong>并发通信</strong></td><td>threading.Thread</td><td>服务端并发 · 战斗 · 导航 · 商店</td><td>letu_fight.py · letu_find_way.py</td></tr>
+  <tr><td>threading.Event</td><td>线程间同步 (战斗状态机 5 Events)</td><td>letu_fight.py:200-205</td></tr>
+  <tr><td>TCP Socket</td><td>YOLO/OCR 服务端-客户端协议</td><td>yolo_server · ocr_server</td></tr>
+  <tr><td>subprocess.Popen</td><td>多进程管理 · 服务启动/降级回退</td><td>call_YOLO.py · ocr_functions.py</td></tr>
+  <tr><td rowspan="2"><strong>配置数据</strong></td><td>JSON</td><td>配置存储 · 事件录制 · 状态追踪</td><td>config.json · reproduce/*.json</td></tr>
+  <tr><td>config.py (点号嵌套)</td><td>运行时状态读写 · 跨运行记忆</td><td>config.py</td></tr>
+  <tr><td rowspan="2"><strong>调试日志</strong></td><td>vedio_log.py</td><td>全屏录制+鼠标指示 · 帧率自适应</td><td>vedio_log.py</td></tr>
+  <tr><td>all_log/save_output.py</td><td>结构化日志+文件持久化</td><td>all_log/save_output.py</td></tr>
+  <tr><td><strong>运行时</strong></td><td>Python 3.11 + 3.13</td><td>双版本共存 (3.11自动化, 3.13 API)</td><td>Python3.11/ · Python3.13/</td></tr>
+</table>
+
+<!-- ================================================================ -->
+<!-- S10: 运行时进程拓扑 -->
+<!-- ================================================================ -->
+<h2 class="section-title" id="s10">🔄 10. 运行时进程拓扑 & 崩溃恢复</h2>
+
+<div class="mermaid-wrap">
+<div class="mermaid">
+flowchart TB
+  subgraph PROCS["运行时进程拓扑 (start_all.bat 一键启动)"]
+    direction LR
+
+    subgraph P1["进程1: OCR Server (Python 3.11)"]
+      O1["ocr_server_final.py<br/>TCP 0.0.0.0:5002<br/>RapidOCR PP-OCRv4<br/>常驻内存 ~500MB"]
+    end
+
+    subgraph P2["进程2: YOLO Server (Python 3.11)"]
+      Y1["yolo_server_final.py<br/>TCP 0.0.0.0:5001<br/>ONNX yolo11n 640×384<br/>常驻内存 ~300MB"]
+    end
+
+    subgraph P3["进程3: API Server (Python 3.13)"]
+      A1["api_server.py<br/>HTTP 0.0.0.0:8002<br/>Flask debug=True<br/>前端↔脚本桥接"]
+    end
+
+    subgraph P4["进程4+5: Frontend (Node.js v20.11.1)"]
+      F1["Vite Dev Server :5173<br/>HMR 热更新"]
+      F2["Electron Desktop<br/>960×720 窗口"]
+    end
+
+    subgraph P5["进程6-N: Automation Workers (按需启动)"]
+      W1["everyday.py<br/>管理员权限运行"]
+      W2["letu.py<br/>TCP调用YOLO/OCR"]
+      W3["Worker N<br/>独立进程 · 互不影响"]
+    end
+  end
+
+  subgraph RECOVERY["🛡️ 崩溃恢复机制"]
+    direction LR
+    R1["YOLO Server<br/>健康检查 + 30s超时<br/>自动重启 + 3次重试<br/>最终降级 subprocess"]
+    R2["OCR Server<br/>自动检测端口占用<br/>自动启动服务进程<br/>降级本地 RapidOCR"]
+    R3["call_YOLO 编排层<br/>重置客户端连接<br/>重启服务端<br/>重试3次后降级"]
+    R4["Process Scripts<br/>每个任务 try/except<br/>失败继续下一个<br/>全程视频可回溯"]
+  end
+
+  P3 -->|"PowerShell RunAs"| P5
+  P4 -->|"fetch API"| P3
+  P5 -->|"TCP JSON+EOF"| P1
+  P5 -->|"TCP JSON+EOF"| P2
+
+  style PROCS fill:#161b22,stroke:#30363d
+  style RECOVERY fill:#f8514908,stroke:#f8514930
+  style P1 fill:#3fb95018,stroke:#3fb95060
+  style P2 fill:#58a6ff18,stroke:#58a6ff60
+  style P3 fill:#d2991d18,stroke:#d2991d60
+  style P4 fill:#39c5cf18,stroke:#39c5cf60
+  style P5 fill:#a371f718,stroke:#a371f760
+</div>
+</div>
+
+</div><!-- .container -->
+
+<div class="footer">
+  <p>Generated from D:\hongkai_done — 崩坏3 自动化脚本集合 | tokutouseki</p>
+  <p style="margin-top:6px">58 Python files · 112 template images · 24 YOLO classes · 100+ OCR text mappings · 5 concurrent server processes</p>
+  <p style="margin-top:4px;font-size:0.85em">技术栈: YOLO11n (ONNX) · PP-OCRv4 (RapidOCR) · OpenCV · Win32 API · Flask · Vue 3 · Electron · threading</p>
+</div>
+
+</body>
+</html>

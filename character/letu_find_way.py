@@ -26,7 +26,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import all_log.save_output
 from on_window import focus_bh3_window, run_as_admin, is_admin
 # 导入YOLO调用函数
-from call_YOLO import call_yolo_model, reset_yolo_client, _last_success_time
+from call_YOLO import call_yolo_model, reset_yolo_client, _last_success_time, filter_guaiwu_ui_upper_half
 # 导入键盘鼠标操作库
 import photos.clicks_keyboard as ck
 
@@ -122,6 +122,9 @@ def take_bh3_screenshot(window_title="崩坏3", save_path=None):
         win32gui.ReleaseDC(hwnd, hwnd_dc)
 
 
+# filter_guaiwu_ui_upper_half 已移至 call_YOLO.py 公共模块
+
+
 def detect_bh3_elements(save_screenshot=False, save_detection_result=False, yolo_timeout=10):
     """
     对崩坏3窗口进行截图并使用YOLO模型进行元素检测
@@ -184,18 +187,21 @@ def detect_bh3_elements(save_screenshot=False, save_detection_result=False, yolo
         print(f"2.1 YOLO检测完成，耗时: {yolo_end - yolo_start:.2f}秒")
         
         if detection_result.get("success", False):
-            total_objects = detection_result.get("total_objects", 0)
+            predictions = detection_result.get("predictions", [])
+            predictions = filter_guaiwu_ui_upper_half(screenshot_path, predictions)
+            detection_result["predictions"] = predictions
+            total_objects = len(predictions)
             print(f"2.2 检测结果：成功识别到 {total_objects} 个目标")
-            
+
             if "predictions" in detection_result:
                 elements = [pred.get("class_name", "未知") for pred in detection_result["predictions"]]
                 print(f"2.3 识别到的元素：{elements}")
         else:
             print(f"2.2 检测结果：失败，原因: {detection_result.get('message', '未知错误')}")
-        
+
         end_time = time.time()
         print(f"3. 整个detect_bh3_elements函数完成，总耗时: {end_time - start_time:.2f}秒")
-        
+
         return detection_result
     finally:
         # 如果不保存源截图，删除临时文件

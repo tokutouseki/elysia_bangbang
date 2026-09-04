@@ -14,6 +14,7 @@ Python3.13/
 # Logs
 all_log/*.log
 vedio_log/
+*.log
 
 # IDE
 .vscode/

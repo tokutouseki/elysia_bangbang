@@ -111,7 +111,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 导入所需模块
 from character.letu_find_way import take_bh3_screenshot
-from call_YOLO import call_yolo_model
+from call_YOLO import call_yolo_model, filter_guaiwu_ui_upper_half
 
 
 def bh3_yolo_recognize(save_screenshot=False, save_detection_result=False):
@@ -165,29 +165,32 @@ def bh3_yolo_recognize(save_screenshot=False, save_detection_result=False):
     # 4. 输出识别结果
     print("\n3. 识别结果：")
     if result.get("success", False):
-        total_objects = result.get("total_objects", 0)
+        predictions = result.get("predictions", [])
+        predictions = filter_guaiwu_ui_upper_half(screenshot_path, predictions)
+        result["predictions"] = predictions
+        total_objects = len(predictions)
         print(f"📊 共识别到 {total_objects} 个元素")
-        
+
         print("\n4. 元素详细信息：")
         print("=" * 30)
         print("| 标签\t| 置信度\t| 坐标\t		|")
         print("=" * 30)
-        
-        for i, pred in enumerate(result.get("predictions", []), 1):
+
+        for i, pred in enumerate(predictions, 1):
             class_name = pred.get("class_name", "未知")
             confidence = pred.get("confidence", 0.0)
             bbox = pred.get("bbox", [])
-            
+
             # 格式化输出
             print(f"| {class_name}\t| {confidence:.4f}\t| {bbox}\t|")
-        
+
         print("=" * 30)
-        
+
         return {
             "success": True,
             "message": "识别成功",
             "total_objects": total_objects,
-            "elements": result.get("predictions", []),
+            "elements": predictions,
             "screenshot_path": screenshot_path
         }
     else:
